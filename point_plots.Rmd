@@ -1,0 +1,300 @@
+---
+title: "point_plots"
+author: "Abby Robinson"
+date: "2024-01-25"
+output: html_document
+---
+
+point plots showing total data spread from iNaturalist and samples sizes 
+
+# data processing 
+```{r load packages}
+library(curl)
+library(sf)
+library(ggplot2)
+library(lubridate)
+library(spData)
+library(ggmap)
+library(sp)
+library(adehabitatHR) ##kernal density package 
+library(maps)
+```
+
+```{r B. philenor data}
+setwd("/Users/abbyrobinson/Desktop/Phenology Publication/Phenology_R_Scripts") # set working directory
+battus <- read.csv("b_philenor_observations_1-23-2024.csv") # load inat data file 
+head(battus)
+
+length(battus$id) 
+b <- subset(battus, select = c(id, observed_on, latitude, longitude, scientific_name) )
+head(b)
+
+b <- subset(b, scientific_name %in% c("Battus philenor", "Battus philenor philenor") )
+length(b$id) 
+battus <- na.omit(b)
+length(battus$id) 
+
+# Adding dates to whole Battus dataset
+b.dates <- parse_date_time(battus$observed_on, "ymd")
+b.months <- months(b.dates)
+b.year <- year(b.dates)
+b.day <- day(b.dates)
+days_of_the_year <- yday(b.dates) #  days since Jan 1
+battus$julian_day <- days_of_the_year
+battus$year <- b.year
+battus$month <- b.months
+battus$day <- b.day
+battus
+
+#summary(battus)
+battus
+```
+
+```{r L. a. astyanax data}
+setwd("/Users/abbyrobinson/Desktop/Phenology Publication/Phenology_R_Scripts")
+astyanax <- read.csv("L.a.astyanax_observations_1-23-24.csv")
+head(astyanax)
+
+length(astyanax$id) 
+l <- subset(astyanax, select = c(id, observed_on, latitude, longitude, scientific_name) )
+
+
+l <- subset(l, scientific_name %in% c("Limenitis arthemis astyanax") )
+length(l$id) 
+astyanax <- na.omit(l)
+length(astyanax$id) 
+
+# Adding dates to whole Limenitis dataset
+l.dates <- parse_date_time(astyanax$observed_on, "ymd")
+l.months <- months(l.dates)
+l.year <- year(l.dates)
+l.day <- day(l.dates)
+days_of_the_year <- yday(l.dates) #  days since Jan 1
+astyanax$julian_day <- days_of_the_year
+astyanax$year <- l.year
+astyanax$month <- l.months
+astyanax$day <- l.day
+astyanax
+
+#summary(astyanax)
+astyanax
+```
+
+```{r L. archippus data}
+setwd("/Users/abbyrobinson/Desktop/Phenology Publication/Phenology_R_Scripts")
+archippus <- read.csv("L.archippus_observations_1-23-2024.csv")
+head(archippus)
+
+length(archippus$id)
+a <- subset(archippus, select = c(id, observed_on, latitude, longitude, scientific_name) )
+head(a)
+
+archippus <- na.omit(a)
+length(archippus$id)
+
+# Adding dates to whole archippus dataset
+a.dates <- parse_date_time(archippus$observed_on, "ymd")
+a.months <- months(a.dates)
+a.year <- year(a.dates)
+a.day <- day(a.dates)
+days_of_the_year <- yday(a.dates) #  days since Jan 1
+archippus$julian_day <- days_of_the_year
+archippus$year <- a.year
+archippus$month <- a.months
+archippus$day <- a.day
+archippus
+
+#summary(archippus)
+archippus
+```
+
+# create latitudinal bins, subset data by years 
+
+```{r B. philenor}
+# we are only using data from 2019-2023, when iNaturalist data density increased significantly 
+battus <- subset(battus, year %in% 2019:2023)
+
+
+# Next use the round() function to create a new column binning all latitudes into integer values.
+battus$latitudinal_bin <- round(battus$latitude)
+battus <- battus[order(battus$latitudinal_bin, decreasing=F),]
+battus
+
+# Check to ensure the data was binned correctly.
+head(battus)
+tail(battus) 
+length(battus$id) 
+unique(battus$year)
+```
+
+```{r L. a. astyanax}
+# First subset all data by the total latitudinal range of interest.
+astyanax <- subset(astyanax, year %in% 2019:2023)
+
+# Next use the round() function to create a new column binning all latitudes into integer values.
+astyanax$latitudinal_bin <- round(astyanax$latitude)
+astyanax <- astyanax[order(astyanax$latitudinal_bin, decreasing=F),]
+astyanax
+
+# Check to ensure the data was binned correctly.
+head(astyanax)
+tail(astyanax) 
+length(astyanax$id) 
+unique(astyanax$year)
+```
+
+```{r L. archippus }
+# First subset all data by the total latitudinal range of interest.
+archippus  <- subset(archippus, year %in% 2019:2023)
+
+# Next use the round() function to create a new column binning all latitudes into integer values.
+archippus$latitudinal_bin <- round(archippus$latitude)
+archippus <- archippus[order(archippus$latitudinal_bin, decreasing=F),]
+archippus
+
+# Check to ensure the data was binned correctly.
+head(archippus)
+tail(archippus) 
+length(archippus$id)
+unique(archippus$year)
+```
+
+#cap sightings by latitude and date 
+this helps correct for artificial inflation of sightings on specific dates (for example, if there was a butterfly surveying event that caused an abnormally high number of butterflies to be recorded in iNaturalist)
+
+```{r all species}
+battus$lat_obs <- paste(battus$latitudinal_bin, battus$observed_on, sep= ":")
+astyanax$lat_obs <- paste(astyanax$latitudinal_bin, astyanax$observed_on, sep= ":")
+archippus$lat_obs <- paste(archippus$latitudinal_bin, archippus$observed_on, sep= ":")
+
+battus_capped = battus[!duplicated(battus$lat_obs),]
+astyanax_capped = astyanax[!duplicated(astyanax$lat_obs),]
+archippus_capped = archippus[!duplicated(archippus$lat_obs),]
+```
+
+# calculate sample size 
+calculate total number of observations per species from iNaturalist within the latitudinal bounds of the study (western limit of -98, northern limit of 41, which corresponds to the point at which battus becomes very rare, according to previous research (Ries&Mullen2008))
+
+```{r subsetting by lat and long limits}
+battus1 <- subset(battus, longitude >-98)
+battus2 <- subset(battus1, latitudinal_bin %in% 30:41)
+
+astyanax1 <- subset(astyanax, longitude >-98)
+astyanax2 <- subset(astyanax1, latitudinal_bin %in% 30:41)
+
+archippus1 <- subset(archippus, longitude >-98)
+archippus2 <- subset(archippus1, latitudinal_bin %in% 30:41)
+
+```
+
+```{r re-cap data}
+battus_capped2 = battus2[!duplicated(battus2$lat_obs),]
+astyanax_capped2 = astyanax2[!duplicated(astyanax2$lat_obs),]
+archippus_capped2 = archippus2[!duplicated(archippus2$lat_obs),]
+bat_total <- length(battus_capped2$id)
+ast_total <- length(astyanax_capped2$id)
+arc_total <- length(archippus_capped2$id)
+
+all_species_total <- bat_total + ast_total + arc_total
+```
+
+# point plots 
+```{r create sf options for plotting}
+
+## point plots (not for kernel density)
+bat1 <- st_as_sf(battus_capped, coords = c("longitude", "latitude"))
+b1 <- ggplot() + geom_sf(data = bat1, color = "lightpink", alpha = 0.5) + theme_bw()
+
+ast1 <- st_as_sf(astyanax_capped, coords = c("longitude", "latitude"))
+as1 <- ggplot() + geom_sf(data = ast1, color = "royalblue", alpha = 0.5) + theme_bw()
+
+arc1 <- st_as_sf(archippus_capped, coords = c("longitude", "latitude"))
+ar1 <- ggplot() + geom_sf(data = arc1, color = "olivedrab", alpha = 0.5) + theme_bw()
+
+#name world map for point plots below 
+world <- map_data("world")
+```
+
+```{r battus point plot}
+bat_pp <- ggplot() + 
+  geom_polygon( data=world, aes(x=long, y=lat, group=group), color="grey", fill = "white", alpha=0.7) + 
+  labs(x = "Longitude", y = "Latitude")  +
+  geom_sf(data = bat1, color = "navyblue", alpha = 0.3) +
+  geom_rect(aes(xmin = -98, xmax = -74, ymin = 29.5, ymax = 41.5),
+            fill = "transparent", color = "black", size = 2) +
+  coord_sf(xlim = c(-130, -60), ylim = c(15, 60), expand = FALSE) +
+  annotate("text", x=-122, y=56, label= "n = 7515", size = 6) + 
+  theme_classic() + 
+  theme(axis.ticks = element_line(size = 1, color="black") , 
+        axis.ticks.length = unit(.3, "cm"), 
+        axis.title = element_text( color="black", size=15, face=2),
+        axis.line = element_line(size = 1, colour = "black", linetype=1),
+        axis.text = element_text(color="black", size=15, face=1)
+  ) 
+bat_pp
+```
+```{r astyanax point plot}
+ast_pp <- ggplot() + 
+  geom_polygon( data=world, aes(x=long, y=lat, group=group), color="grey", fill = "white", alpha=0.7) + 
+  labs(x = "Longitude", y = "Latitude")  +
+  geom_sf(data = ast1, color = "lightblue", alpha = 0.3) +
+  geom_rect(aes(xmin = -98, xmax = -74, ymin = 29.5, ymax = 41.5),
+            fill = "transparent", color = "black", size = 2) +
+  coord_sf(xlim = c(-130, -60), ylim = c(15, 60), expand = FALSE) +
+  annotate("text", x=-122, y=56, label= "n = 6618", size = 6) + 
+  theme_classic() + 
+  theme(axis.ticks = element_line(size = 1, color="black") , 
+        axis.ticks.length = unit(.3, "cm"), 
+        axis.title = element_text( color="black", size=15, face=2),
+        axis.line = element_line(size = 1, colour = "black", linetype=1),
+        axis.text = element_text(color="black", size=15, face=1)
+  ) 
+ast_pp
+```
+
+```{r}
+arc_pp <- ggplot() + 
+  geom_polygon( data=world, aes(x=long, y=lat, group=group), color="grey", fill = "white", alpha=0.7) + 
+  labs(x = "Longitude", y = "Latitude")  +
+  geom_sf(data = arc1, color = "orange", alpha = 0.3) +
+  geom_rect(aes(xmin = -98, xmax = -74, ymin = 29.5, ymax = 41.5),
+            fill = "transparent", color = "black", size = 2) +
+  coord_sf(xlim = c(-130, -60), ylim = c(15, 60), expand = FALSE) +
+  annotate("text", x=-122, y=56, label= "n = 4805", size = 6) + 
+  theme_classic() + 
+  theme(axis.ticks = element_line(size = 1, color="black") , 
+        axis.ticks.length = unit(.3, "cm"), 
+        axis.title = element_text( color="black", size=15, face=2),
+        axis.line = element_line(size = 1, colour = "black", linetype=1),
+        axis.text = element_text(color="black", size=15, face=1)
+  ) 
+arc_pp
+```
+```{r all species figure}
+all_species <- ggplot() + 
+  geom_polygon( data=world, aes(x=long, y=lat, group=group), color="grey", fill = "white", alpha=0.7) + 
+  labs(x = "Longitude", y = "Latitude")  +
+  geom_sf(data = arc1, color = "orange", alpha = 0.3) +
+  geom_sf(data = ast1, color = "lightblue", alpha = 0.3) +
+  geom_sf(data = bat1, color = "navyblue", alpha = 0.3) +
+  geom_rect(aes(xmin = -98, xmax = -74, ymin = 29.5, ymax = 41.5),
+            fill = "transparent", color = "black", size = 2) +
+  coord_sf(xlim = c(-130, -60), ylim = c(15, 60), expand = FALSE) +
+  annotate("text", x=-122, y=56, label= "n = 18938", size = 6) + 
+  theme_classic() + 
+  theme(axis.ticks = element_line(size = 1, color="black") , 
+        axis.ticks.length = unit(.3, "cm"), 
+        axis.title = element_text( color="black", size=15, face=2),
+        axis.line = element_line(size = 1, colour = "black", linetype=1),
+        axis.text = element_text(color="black", size=15, face=1)
+  ) 
+
+all_species
+
+library(patchwork)
+
+final_fig <- bat_pp + ast_pp + arc_pp + all_species
+
+ggsave(final_fig, file = "/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/final_point_plot.pdf", width=15, height=10, units=c("in"), useDingbats=FALSE)
+```
+

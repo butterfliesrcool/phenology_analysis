@@ -1,0 +1,332 @@
+---
+title: "phenesse_analysis"
+author: "Abby Robinson"
+date: "2024-01-26"
+output: html_document
+---
+
+this script includes all analyses of phenesee estimates 
+
+# Calculating a p-value from confidence intervals 
+https://genometoolbox.blogspot.com/2013/11/how-to-estimate-p-value-from-confidence.html#:~:text=Therefore%2C%20if%20we%20are%20given,to%20calculate%20the%20p%2Dvalue.
+
+Confidence intervals (CIs) are useful statistical calculations to help get a level of certainty around an estimated effect size.  Whenever possible, I advocate to include a CI when reporting an estimated effect size.  Sometimes, however, it is of interest to back calculate a p-value from a confidence interval if the p-value is not reported in the manuscript.  To do so, we need to remember the basic equations for the confidence interval and the calculation of a p-value.  Assuming we are dealing with a 95% CI, we would take the effect size and subtract/add 1.96 times the standard error of the effect size to get our lower and upper bounds of the confidence interval.  For the p-value, we just take the effect estimate and divide it by the standard error of the effect estimate to get a z score from which we can calculate the p-value.  Therefore, if we are given an effect size and confidence interval all we need to do is back calculate the standard error and combine that with the effect size to get the z score used to calculate the p-value.  Below are two examples to illustrate how to do this.
+
+Suppose we have an estimate of a risk difference and a respective 95 percent confidence interval of 3.60 (0.70, 6.50).  Here are the steps to follow:
+(1) Subtract the lower limit from the upper limit to get the difference and divide by 2: (6.50-0.70)/2=2.9
+(2) Divide the difference by 1.96 (for a 95% CI) to get the standard error estimate: 2.9/1.96=1.48
+(3) Divide the risk difference estimate by the standard error estimate to get a z score: 3.60/1.48=2.43
+(4) Look up the z score using Python, R (ex: 2*pnorm(-abs(z))), Excel (ex: 2*1-normsdist(z score)), or an online calculator to get the p-value.  Usually the two-sided p-value is reported: p=0.015 (two-sided)
+
+```{r practice calculations}
+# this chunk is practice code for calculating a z score and p value at latitudinal bin 27 
+# calculating standard error from confidence intervals (https://genometoolbox.blogspot.com/2013/11/how-to-estimate-p-value-from-confidence.html#:~:text=Therefore%2C%20if%20we%20are%20given,to%20calculate%20the%20p%2Dvalue.)
+
+#archippus: estimate = 39.6, low ci=18, high ci=69, sample size=173
+#battus: estimate=41.3, low ci=33.8, high ci=55, sample size=147
+
+#battus 
+ci_diff_battus <- (55 - 33.8)/2
+se_battus <- ci_diff_battus/1.96 #1.96 is the number corresponding to the 95% confidence interval 
+
+#archippus 
+ci_diff_arch <- (69 - 18)/2
+se_arch <- ci_diff_arch/1.96 #1.96 is the number corresponding to the 95% confidence interval 
+
+
+## calculating standard deviation from standard error (https://handbook-5-1.cochrane.org/chapter_7/7_7_3_2_obtaining_standard_deviations_from_standard_errors_and.htm)
+
+#battus
+sd_battus <- se_battus*sqrt(147)
+sd_arch <- se_arch*sqrt(173)
+
+mean_battus <- 41.3
+mean_arch <- 39.6
+
+n_battus <- 147
+n_arch <- 173
+##calculating z score in r from mean and standard deviation (https://camilo-mora.github.io/GEO380/the-two-sample-z-test-by-hand.html)
+
+Z_Score_Numerator= (mean_battus-mean_arch) -0  #because we assume that the two treatments have the same effect, we then have to assume that the difference between the population means is zero.
+
+Z_Score_denominator= sqrt(((sd_battus^2)/n_battus)+((sd_arch^2)/n_arch))
+                          
+Z_score=Z_Score_Numerator/Z_Score_denominator
+
+
+##calculate p vlaue from z score (https://www.r-bloggers.com/2022/05/calculate-the-p-value-from-z-score-in-r/)
+2*pnorm(q=Z_score, lower.tail=FALSE) #q is the z score 
+```
+
+# data processing 
+```{r load data and subset species}
+setwd("/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis") # set working directory 
+estimates <- read.csv("phenesse_estimates_df.csv") # load phenesse estimate data 
+
+#remove NAs from dataset 
+length(estimates$species) 
+estimates_noNA <- na.omit(estimates)
+length(estimates_noNA$species) 
+estimates_noNA <- estimates_noNA[order(estimates_noNA$latitude, decreasing=F),]
+
+##subset out mimetic latitudes where battus, astyanax, and archippus are all present 
+mimetic_zone <- subset(estimates_noNA, latitude %in% 29:41)
+
+##subset out individual species to calculate standard deviation for each latitude 
+mz_battus <- subset(mimetic_zone, species == "battus")
+mz_astyanax <- subset(mimetic_zone, species == "astyanax")
+mz_archippus <- subset(mimetic_zone, species == "archippus")
+```
+
+#calculate standard deviation for each species
+
+```{r battus}
+
+##check data structure and convert latitude to factor and sample size into integer data 
+str(mz_battus)
+mz_battus$latitude = as.factor(mz_battus$latitude)
+mz_battus$sample_size = as.numeric(mz_battus$sample_size)
+str(mz_battus)
+
+#split data by latitudinal bin for loop function 
+my_mz_battus_splits = split(mz_battus, mz_battus$latitude)
+my_mz_battus_splits$"30"$latitude
+length(my_mz_battus_splits) #13 latitudes 
+as.vector(unique(my_mz_battus_splits$"30"$latitude))
+
+sd_battus_df = data.frame() # create empty data frame 
+
+for (i in my_mz_battus_splits) {
+  ci_diff <- (i$onset_high_ci - i$onset_low_ci)/2
+  se <- ci_diff/1.96  #1.96 is the number corresponding to the 95% confidence interval 
+  sd <- se*sqrt(i$sample_size)
+  lat <- as.vector(unique(i$latitude))
+  output = matrix(
+        c(lat, sd), 
+        nrow = 1,             
+        ncol = 2,           
+        byrow = TRUE         
+        )
+  output <- as.data.frame(output)
+  sd_battus_df = rbind(sd_battus_df, output)
+}
+
+sd_battus_df # data frame with standard error for battus 
+
+##check loop by running lat 30 by hand  
+mz_battus30 <- subset(mz_battus, latitude == 30)
+ci_diff <- (mz_battus30$onset_high_ci - mz_battus30$onset_low_ci)/2
+se <- ci_diff/1.96
+sd <- se*sqrt(mz_battus30$sample_size)
+sd #matches lat 30 in loop 
+
+```
+
+```{r astyanax }
+
+##check data structure and convert latitude to factor and sample size into integer data 
+str(mz_astyanax)
+mz_astyanax$latitude = as.factor(mz_astyanax$latitude)
+mz_astyanax$sample_size = as.numeric(mz_astyanax$sample_size)
+str(mz_astyanax)
+
+#split data by latitudinal bin for loop function 
+my_mz_astyanax_splits = split(mz_astyanax, mz_astyanax$latitude)
+
+sd_astyanax_df = data.frame() 
+
+for (i in my_mz_astyanax_splits) {
+  ci_diff <- (i$onset_high_ci - i$onset_low_ci)/2
+  se <- ci_diff/1.96  #1.96 is the number corresponding to the 95% confidence interval 
+  sd <- se*sqrt(i$sample_size)
+  lat <- as.vector(unique(i$latitude))
+  output = matrix(
+        c(lat, sd), 
+        nrow = 1,             
+        ncol = 2,           
+        byrow = TRUE         
+        )
+  output <- as.data.frame(output)
+  sd_astyanax_df = rbind(sd_astyanax_df, output)
+}
+
+sd_astyanax_df
+
+##check loop by running lat 30 by hand  
+mz_astyanax30 <- subset(mz_astyanax, latitude == 30)
+ci_diff <- (mz_astyanax30$onset_high_ci - mz_astyanax30$onset_low_ci)/2
+se <- ci_diff/1.96
+sd <- se*sqrt(mz_astyanax30$sample_size)
+sd #matches result from loop function 
+```
+
+```{r archippus }
+
+##check data structure and convert latitude to factor and sample size into integer data 
+str(mz_archippus)
+mz_archippus$latitude = as.factor(mz_archippus$latitude)
+mz_archippus$sample_size = as.numeric(mz_archippus$sample_size)
+str(mz_archippus)
+
+my_mz_archippus_splits = split(mz_archippus, mz_archippus$latitude)
+
+sd_archippus_df = data.frame()
+
+for (i in my_mz_archippus_splits) {
+  ci_diff <- (i$onset_high_ci - i$onset_low_ci)/2
+  se <- ci_diff/1.96  #1.96 is the number corresponding to the 95% confidence interval 
+  sd <- se*sqrt(i$sample_size)
+  lat <- as.vector(unique(i$latitude))
+  output = matrix(
+        c(lat, sd), 
+        nrow = 1,             
+        ncol = 2,           
+        byrow = TRUE         
+        )
+  output <- as.data.frame(output)
+  sd_archippus_df = rbind(sd_archippus_df, output)
+}
+
+sd_archippus_df
+
+##check loop by running lat 30 by hand  
+mz_archippus30 <- subset(mz_archippus, latitude == 30)
+ci_diff <- (mz_archippus30$onset_high_ci - mz_archippus30$onset_low_ci)/2
+se <- ci_diff/1.96
+sd <- se*sqrt(mz_archippus30$sample_size)
+sd #matches result from loop function 
+```
+# create data frame for z test 
+```{r create data frame}
+##generate data frame with latitude, estimate_battus, estimate_astyanax, estimate_archippus, n_bat, n_ast, n_arch, sd_bat, sd_ast, sd_arch
+##this data frame will be 13 rows long 
+
+data_for_ztest <- data.frame(latitude = 29:41, 
+                             battus_estimate = mz_battus$onset_estimate, 
+                             battus_n = mz_battus$sample_size, 
+                             battus_sd = sd_battus_df$V2, 
+                             astyanax_estimate = mz_astyanax$onset_estimate, 
+                             astyanax_n = mz_astyanax$sample_size, 
+                             astyanax_sd = sd_astyanax_df$V2, 
+                             archippus_estimate = mz_archippus$onset_estimate, 
+                             archippus_n = mz_archippus$sample_size, 
+                             archippus_sd = sd_archippus_df$V2
+                             )
+data_for_ztest
+```
+#run z test 
+```{r loop function}
+##calculating z score in r from mean and standard deviation (https://camilo-mora.github.io/GEO380/the-two-sample-z-test-by-hand.html)
+
+## write loop function that will run the z test and p value calculation for each pairwise comparison 
+
+data_for_ztest
+
+##check data structure and convert latitude to factor and sample size into integer data 
+str(data_for_ztest)
+data_for_ztest$latitude = as.factor(data_for_ztest$latitude)
+data_for_ztest$battus_sd = as.numeric(data_for_ztest$battus_sd)
+data_for_ztest$astyanax_sd = as.numeric(data_for_ztest$astyanax_sd)
+data_for_ztest$archippus_sd = as.numeric(data_for_ztest$archippus_sd)
+str(data_for_ztest)
+
+#split z score data frame by latitude for loop function
+my_ztest_splits = split(data_for_ztest, data_for_ztest$latitude)
+
+options(scipen=999)
+
+ztest_df = data.frame() #create empty data frame 
+
+##this loop function runs a two sample z test for all pairwise comparisons at each latitude 
+for (i in my_ztest_splits) {
+  ## battus - astyanax comparison 
+  bat_ast_numerator= (i$battus_estimate - i$astyanax_estimate) - 0  #because we assume that the two treatments have the same effect, we then have to assume that the difference between the population means is zero.
+  bat_ast_denominator= sqrt(((i$battus_sd^2)/i$battus_n)+((i$astyanax_sd^2)/i$astyanax_n))
+  bat_ast_z_score = abs(bat_ast_numerator/bat_ast_denominator)
+  bat_ast_p_value = 2*pnorm(q=bat_ast_z_score, lower.tail=FALSE) #q is the z score 
+  lat = as.vector(unique(i$latitude))
+  bat_ast = matrix(
+        c(lat, "battus_astyanax", bat_ast_z_score, bat_ast_p_value), 
+        nrow = 1,             
+        ncol = 4,           
+        byrow = TRUE         
+        )
+  bat_ast <- as.data.frame(bat_ast)
+  
+  ## battus - archippus comparison 
+  bat_arc_numerator= (i$battus_estimate - i$archippus_estimate) - 0  #because we assume that the two treatments have the same effect, we then have to assume that the difference between the population means is zero.
+  bat_arc_denominator= sqrt(((i$battus_sd^2)/i$battus_n)+((i$archippus_sd^2)/i$archippus_n))
+  bat_arc_z_score = abs(bat_arc_numerator/bat_arc_denominator)
+  bat_arc_p_value = 2*pnorm(q=bat_arc_z_score, lower.tail=FALSE) #q is the z score 
+  lat = as.vector(unique(i$latitude))
+  bat_arc = matrix(
+        c(lat, "battus_archippus", bat_arc_z_score, bat_arc_p_value), 
+        nrow = 1,             
+        ncol = 4,           
+        byrow = TRUE         
+        )
+  bat_arc <- as.data.frame(bat_arc)
+  
+    ## astyanax - archippus comparison 
+  ast_arc_numerator= (i$astyanax_estimate - i$archippus_estimate) - 0  #because we assume that the two treatments have the same effect, we then have to assume that the difference between the population means is zero.
+  ast_arc_denominator= sqrt(((i$astyanax_sd^2)/i$astyanax_n)+((i$archippus_sd^2)/i$archippus_n))
+  ast_arc_z_score = abs(ast_arc_numerator/ast_arc_denominator)
+  ast_arc_p_value = 2*pnorm(q=ast_arc_z_score, lower.tail=FALSE) #q is the z score 
+  lat = as.vector(unique(i$latitude))
+  ast_arc = matrix(
+        c(lat, "astyanax_archippus", ast_arc_z_score, ast_arc_p_value), 
+        nrow = 1,             
+        ncol = 4,           
+        byrow = TRUE         
+        )
+  ast_arc <- as.data.frame(ast_arc)
+  ztest_df = rbind(ztest_df, bat_ast, bat_arc, ast_arc)
+}
+
+colnames(ztest_df) <- c("latitude", "species_comparison", "z_score", "p_value") 
+ztest_df
+ztest_df[order(ztest_df$species_comparison,decreasing=T),]
+ztest_df
+```
+#calculate average emergence delay between models and mimics 
+```{r emergence delay}
+## what is the average delay between models and mimics in latitudes with significant model first occurrence? 
+ztest_bat_ast <- subset(ztest_df, species_comparison == "battus_astyanax")
+data_for_ztest # data file with onset estimates 
+
+ztest_bat_ast$battus_estimate <- data_for_ztest$battus_estimate
+ztest_bat_ast$astyanax_estimate <- data_for_ztest$astyanax_estimate
+emergence_delay <- ztest_bat_ast$astyanax_estimate - ztest_bat_ast$battus_estimate 
+
+ztest_bat_ast$emergence_delay <- emergence_delay
+
+mean(ztest_bat_ast$emergence_delay) #14.65 days 
+# mean emergence delay between models and mimics 
+
+```
+
+# linear models to assess the influence of latitude on flight duration and first emergence date
+```{r models}
+mimetic_zone1 <-  subset(mimetic_zone, species %in% c("archippus", "astyanax", "battus"))
+
+duration <- mimetic_zone1$offset_estimate - mimetic_zone1$onset_estimate
+mimetic_zone1$duration <- duration
+
+
+model1 <- lm(onset_estimate ~ latitude + species, data = mimetic_zone1)
+summary(model1)
+
+model2 <- lm(onset_estimate ~ duration + species, data = mimetic_zone1)
+summary(model2)
+
+plot(mimetic_zone1$latitude, mimetic_zone1$onset_estimate, pch = 16, cex = 1.3, col = "black", xlab = "Latitude", ylab = "Onset Date")
+abline(lm(mimetic_zone1$onset_estimate ~ mimetic_zone1$latitude))
+
+plot(mimetic_zone1$latitude, mimetic_zone1$duration, pch = 16, cex = 1.3, col = "black", xlab = "Latitude", ylab = "Onset Date")
+abline(lm(mimetic_zone1$duration ~ mimetic_zone1$latitude))
+
+```
+
+
+
+

@@ -287,6 +287,9 @@ colnames(ztest_df) <- c("latitude", "species_comparison", "z_score", "p_value")
 ztest_df
 ztest_df[order(ztest_df$species_comparison,decreasing=T),]
 ztest_df
+
+## write output into a CSV file 
+write.csv(ztest_df,file='/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/ztest_df.csv', row.names=FALSE)
 ```
 #calculate average emergence delay between models and mimics 
 ```{r emergence delay}
@@ -300,7 +303,9 @@ emergence_delay <- ztest_bat_ast$astyanax_estimate - ztest_bat_ast$battus_estima
 
 ztest_bat_ast$emergence_delay <- emergence_delay
 
-mean(ztest_bat_ast$emergence_delay) #14.65 days 
+ztest_bat_ast <- subset(ztest_bat_ast, latitude %in% 30:40)
+
+mean(ztest_bat_ast$emergence_delay) #12.30 days 
 # mean emergence delay between models and mimics 
 
 ```

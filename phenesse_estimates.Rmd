@@ -183,6 +183,30 @@ archippus_capped = archippus[!duplicated(archippus$lat_obs),]
 str(archippus_capped)
 archippus_capped$latitudinal_bin = as.factor(archippus_capped$latitudinal_bin)
 ```
+# assumptions check 
+must check assumptions about sample distribution before we can estimate phenology and run two sample z test. We know that data are continuous and sample size is large (>30), so we do not need to check these assumptions 
+assumptions of z test: 
+1. sample is random 
+2. sample is independent 
+3. sample is normally distributed 
+
+```{r}
+# sample data sets 
+battus_capped
+astyanax_capped
+archippus_capped
+
+length(battus_capped$julian_day)
+butterfly_data <- rbind(battus_capped, astyanax_capped, archippus_capped)
+
+#testing normality 
+library("ggpubr")
+# Density plot
+ggdensity(butterfly_data$julian_day, fill = "lightgray")
+# QQ plot
+ggqqplot(butterfly_data$julian_day)
+hist(butterfly_data$julian_day)
+```
 
 #Phenesse estimates 
 

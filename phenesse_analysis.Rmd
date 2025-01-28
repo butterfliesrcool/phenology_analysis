@@ -70,7 +70,7 @@ length(estimates_noNA$species)
 estimates_noNA <- estimates_noNA[order(estimates_noNA$latitude, decreasing=F),]
 
 ##subset out mimetic latitudes where battus, astyanax, and archippus are all present 
-mimetic_zone <- subset(estimates_noNA, latitude %in% 29:41)
+mimetic_zone <- subset(estimates_noNA, latitude %in% 30:40)
 
 ##subset out individual species to calculate standard deviation for each latitude 
 mz_battus <- subset(mimetic_zone, species == "battus")
@@ -291,7 +291,9 @@ ztest_df
 ## write output into a CSV file 
 write.csv(ztest_df,file='/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/ztest_df.csv', row.names=FALSE)
 ```
+
 #calculate average emergence delay between models and mimics 
+
 ```{r emergence delay}
 ## what is the average delay between models and mimics in latitudes with significant model first occurrence? 
 ztest_bat_ast <- subset(ztest_df, species_comparison == "battus_astyanax")
@@ -307,6 +309,117 @@ ztest_bat_ast <- subset(ztest_bat_ast, latitude %in% 30:40)
 
 mean(ztest_bat_ast$emergence_delay) #12.30 days 
 # mean emergence delay between models and mimics 
+
+#standard error
+print(sd(ztest_bat_ast$emergence_delay)/sqrt(length((ztest_bat_ast$emergence_delay))))
+#1.31
+
+## battus_archippus
+ztest_bat_arch <- subset(ztest_df, species_comparison == "battus_archippus")
+data_for_ztest # data file with onset estimates 
+
+ztest_bat_arch$battus_estimate <- data_for_ztest$battus_estimate
+ztest_bat_arch$archippus_estimate <- data_for_ztest$archippus_estimate
+emergence_delay2 <- ztest_bat_arch$archippus_estimate - ztest_bat_arch$battus_estimate 
+
+ztest_bat_arch$emergence_delay <- emergence_delay2
+
+ztest_bat_arch <- subset(ztest_bat_arch, latitude %in% 30:40)
+
+mean(ztest_bat_arch$emergence_delay) #21.97
+
+#standard error
+print(sd(ztest_bat_arch$emergence_delay)/sqrt(length((ztest_bat_arch$emergence_delay))))
+#1.69
+
+## astyanax_archippus
+ztest_ast_arch <- subset(ztest_df, species_comparison == "astyanax_archippus")
+data_for_ztest # data file with onset estimates 
+
+ztest_ast_arch$astyanax_estimate <- data_for_ztest$astyanax_estimate
+ztest_ast_arch$archippus_estimate <- data_for_ztest$archippus_estimate
+emergence_delay3 <- ztest_ast_arch$archippus_estimate - ztest_ast_arch$astyanax_estimate 
+
+ztest_ast_arch$emergence_delay <- emergence_delay3
+
+ztest_ast_arch <- subset(ztest_ast_arch, latitude %in% 30:40)
+
+mean(ztest_ast_arch$emergence_delay) #9.66
+
+#standard error
+print(sd(ztest_ast_arch$emergence_delay)/sqrt(length((ztest_ast_arch$emergence_delay))))
+#1.94
+
+```
+# mean sample size & standard error
+```{r}
+battus_n <- mz_battus$sample_size
+battus_mean_n <- mean(mz_battus$sample_size)
+#standard error 
+print(sd(battus_n)/sqrt(length((battus_n))))
+
+astyanax_n <- mz_astyanax$sample_size
+mean(mz_astyanax$sample_size)
+#standard error 
+print(sd(astyanax_n)/sqrt(length((astyanax_n))))
+
+archippus_n <- mz_archippus$sample_size
+mean(mz_archippus$sample_size)
+#standard error 
+print(sd(archippus_n)/sqrt(length((archippus_n))))
+```
+
+# mean onset dates 
+```{r}
+#remove NAs from dataset 
+length(estimates$species) 
+estimates_noNA <- na.omit(estimates)
+length(estimates_noNA$species) 
+estimates_noNA <- estimates_noNA[order(estimates_noNA$latitude, decreasing=F),]
+
+##subset out mimetic latitudes where battus, astyanax, and archippus are all present 
+mimetic_zone <- subset(estimates_noNA, latitude %in% 30:40)
+
+##subset out individual species 
+mz_battus <- subset(mimetic_zone, species == "battus")
+mz_astyanax <- subset(mimetic_zone, species == "astyanax")
+mz_archippus <- subset(mimetic_zone, species == "archippus")
+
+mean(mz_battus$onset_estimate) #97.52727
+battus_onset <- mz_battus$onset_estimate
+#standard error 
+print(sd(battus_onset)/sqrt(length((battus_onset))))
+
+mean(mz_astyanax$onset_estimate) #109.8318
+astyanax_onset <- mz_astyanax$onset_estimate
+print(sd(astyanax_onset)/sqrt(length((astyanax_onset))))
+
+mean(mz_archippus$onset_estimate) #119.4955
+archippus_onset <- mz_archippus$onset_estimate
+print(sd(archippus_onset)/sqrt(length((archippus_onset))))
+
+#difference in onset date between northernmost and southernmost latitudes 
+mz_battus_north <- subset(mz_battus, latitude == 40)
+mz_battus_north$onset_estimate
+mz_battus_south <- subset(mz_battus, latitude == 30)
+mz_battus_south$onset_estimate
+battus_onset_diff <- mz_battus_north$onset_estimate - mz_battus_south$onset_estimate
+
+mz_astyanax_north <- subset(mz_astyanax, latitude == 40)
+mz_astyanax_north$onset_estimate
+mz_astyanax_south <- subset(mz_astyanax, latitude == 30)
+mz_astyanax_south$onset_estimate
+astyanax_onset_diff <- mz_astyanax_north$onset_estimate - mz_astyanax_south$onset_estimate
+
+mz_archippus_north <- subset(mz_archippus, latitude == 40)
+mz_archippus_north$onset_estimate
+mz_archippus_south <- subset(mz_archippus, latitude == 30)
+mz_archippus_south$onset_estimate
+archippus_onset_diff <- mz_archippus_north$onset_estimate - mz_archippus_south$onset_estimate
+
+onset_diff <- c(battus_onset_diff, astyanax_onset_diff, archippus_onset_diff)
+mean(onset_diff) #57.35
+print(sd(onset_diff)/sqrt(length((onset_diff))))
 
 ```
 

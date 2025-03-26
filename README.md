@@ -8,9 +8,9 @@
 
 **phenesse_scripts:** This folder contains all scripts used to generate onset phenology estimates, perform two-sample z-tests, and generate figures. 
 
-**phenesse_csv_files:** This folder contains all csv files generated from the phenesse_scripts folder.
+**phenesse_csv_files:** This folder contains all csv files generated from scripts in the phenesse_scripts folder.
 
-**phenology_figures:** This folder contains all figures generated from the phenesse_scripts folder. 
+**phenology_figures:** This folder contains all figures generated from scripts in the phenesse_scripts folder. 
 
 
 

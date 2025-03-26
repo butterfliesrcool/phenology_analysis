@@ -3,15 +3,15 @@
 **DATA CITATION:** iNaturalist contributors, iNaturalist (2025). iNaturalist Research-grade Observations. iNaturalist.org. Occurrence dataset https://doi.org/10.15468/ab3s5x accessed via GBIF.org on 2025-03-19.
 
 
-**phenesse_scripts:** This folder contains all scripts used to generate onset phenology estimates, perform two-sample z-tests, and generate figures. 
+**phenesse_scripts:** This folder contains all scripts used to generate onset phenology estimates, perform two-sample z-tests, and generate figures. Scripts must be run in the order they are listed below.
 
 *all analysis were performed using R version 4.4.1 (2024-06-14)*
-
-**GBIF_point_plots.Rmd:** This script generates point plots for all iNaturalist records of Battus philenor, Limenitis arthemis astyanax, Danuas plexippus, and Limenitis archippus and visualises geographic limits of the focal study. 
 
 **phenesse_estimates_GBIF.Rmd:** This script cleans the iNaturalist data and generates onset phenology estimates for all species, and populates the data frame titled "phenesse_estimates_df.csv" with these estimates. 
 
 **phenesse_analysis.Rmd:** This script performs the statistical analysis for the onset phenology estimates, and generates the data frame titled "ztest_df.csv"
+
+**GBIF_point_plots.Rmd:** This script generates point plots for all iNaturalist records of Battus philenor, Limenitis arthemis astyanax, Danuas plexippus, and Limenitis archippus, calculates total sample sizes of occurrence records, and visualizes geographic limits of the focal study with bounding boxes 
 
 **phenology_plots.Rmd:** This script uses the phenesse_estimates_df.csv data frame to generate all plots presented in the manuscript. 
 

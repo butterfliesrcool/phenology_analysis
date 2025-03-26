@@ -1,0 +1,317 @@
+---
+title: "phenesse_estimates_GBIF"
+author: "Abby Robinson"
+date: "2025-03-05"
+output: html_document
+---
+
+This code document loads data for iNaturalist research-grade observations downloaded through GBIF, filters out subspecies and data entries with missing information, etc., organizes data for phenology analysis, and runs phenesse quantile functions to generate file with phenology estimates. Only observations with photos that were classified as research grade were included in this analysis 
+
+GIF Citation: iNaturalist contributors, iNaturalist (2025). iNaturalist Research-grade Observations. iNaturalist.org. Occurrence dataset https://doi.org/10.15468/ab3s5x accessed via GBIF.org on 2025-03-19.
+
+#Data Processing 
+
+```{r load packages }
+library(curl)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(sf)
+library(spData)
+library(phenesse)
+library(rgbif)
+library(stringr)
+```
+
+```{r load and filter data}
+# use download key to load data from GBIF download 
+data <- occ_download_get(key="0017454-250310093411724", overwrite=TRUE)
+data <- occ_download_import(data)
+butterfly_data <- as.data.frame(data)
+
+length(butterfly_data$gbifID)
+
+butterfly_data <- subset(butterfly_data, select = c(gbifID, lifeStage, eventDate, decimalLatitude, decimalLongitude, species) )
+butterfly_adults <- subset(butterfly_data, lifeStage == "Adult")
+length(butterfly_adults$gbifID)
+
+butterfly_adults <- na.omit(butterfly_adults)
+length(butterfly_adults$gbifID)
+
+#rename columns
+colnames(butterfly_adults)[1] ="id"
+colnames(butterfly_adults)[2] ="life_stage"
+colnames(butterfly_adults)[3] ="event_date"
+colnames(butterfly_adults)[4] ="latitude"
+colnames(butterfly_adults)[5] ="longitude"
+
+head(butterfly_adults)
+
+unique(butterfly_adults$species)
+
+limenitis <- subset(butterfly_data, species == "Limenitis astyanax")
+unique(butterfly_data$species)
+unique(limenitis$infraspecificEpithet) #dataset only inlcudes limenitis arthemis astyanax morph 
+```
+
+```{r create julian day columns}
+#separate date and time 
+butterfly_adults[c('observed_on', 'observed_time')] <- str_split_fixed(butterfly_adults$event_date, 'T', 2)
+butterfly_adults
+
+# Adding dates to whole  dataset
+dates <- parse_date_time(butterfly_adults$observed_on, "ymd")
+months <- months(dates)
+year <- year(dates)
+day <- day(dates)
+days_of_the_year <- yday(dates) #  days since Jan 1
+butterfly_adults$julian_day <- days_of_the_year
+butterfly_adults$year <- year
+butterfly_adults$month <- months
+butterfly_adults$day <- day
+butterfly_adults
+
+# Adding longitudinal cutoff (see rationale for this cutoff in the plots made later in this document & in phenology point plot figure)
+butterfly_adults <- butterfly_adults %>% filter(longitude >= -98)
+
+butterfly_adults
+```
+
+#Create latitudianl bins
+```{r create lat bins}
+#run analysis on all research grade records between 2014 - 2024 (10 years)
+butterfly_adults <- subset(butterfly_adults, year %in% 2014:2024)
+length(butterfly_adults$id)
+
+# Next use the round() function to create a new column binning all latitudes into integer values.
+butterfly_adults$latitudinal_bin <- round(butterfly_adults$latitude)
+butterfly_adults <- butterfly_adults[order(butterfly_adults$latitudinal_bin, decreasing=F),]
+butterfly_adults
+
+#subset latitudinal bins of interest 
+butterfly_adults <- subset(butterfly_adults, latitudinal_bin %in% 30:40)
+
+# Check to ensure the data was binned correctly.
+head(butterfly_adults)
+tail(butterfly_adults) 
+length(butterfly_adults$id) 
+unique(butterfly_adults$year)
+```
+
+#cap sightings by unique combinations of species, latitude, and date 
+this helps correct for artificial inflation of sightings on specific dates (for example, if there was a butterfly surveying event that caused an abnormally high number of butterflies to be recorded in iNaturalist)
+
+```{r cap data}
+#creating grid system of approximate 7 km cells to correct for observer bias 
+butterfly_adults$lat0_1 <- round(butterfly_adults$latitude, digits = 1)
+butterfly_adults$long0_1 <- round(butterfly_adults$longitude, digits = 1)
+
+butterfly_adults$coords0_1 <- paste(butterfly_adults$lat0_1, butterfly_adults$long0_1, sep= "-")
+
+butterfly_adults$sp_coords_date_ID <- paste(butterfly_adults$species, butterfly_adults$coords0_1, butterfly_adults$observed_on, sep= ":")
+length(butterfly_adults$id)
+butterfly_adults_capped = butterfly_adults[!duplicated(butterfly_adults$sp_coords_date_ID),]
+length(butterfly_adults_capped$id) 
+#this removes duplicate sightings of the same species on the same day that are within 7km of each other 
+```
+
+# check data structure 
+```{r checked data strucure}
+# checking the structure of our data and what type of data you have
+str(butterfly_adults_capped)
+butterfly_adults_capped$latitudinal_bin = as.factor(butterfly_adults_capped$latitudinal_bin)
+```
+# assumptions check 
+must check assumptions about sample distribution before we can estimate phenology and run two sample z test. We know that data are continuous and sample size is large (>30), so we do not need to check these assumptions 
+assumptions of z test: 
+1. sample is random 
+2. sample is independent 
+3. sample is normally distributed 
+
+```{r}
+length(butterfly_adults_capped$julian_day)
+
+#testing normality 
+library("ggpubr")
+# Density plot
+ggdensity(butterfly_adults_capped$julian_day, fill = "lightgray")
+# QQ plot
+ggqqplot(butterfly_adults_capped$julian_day)
+hist(butterfly_adults_capped$julian_day)
+
+
+## write output into a CSV file 
+write.csv(butterfly_adults_capped,file='/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenesse_csv_files/butterfly_adults_capped_df.csv', row.names=FALSE)
+
+```
+
+#Phenesse estimates - separate by species and run phenometrics by latitude bin 
+
+```{r separate by species}
+#subset by species and latitudinal range of interest 
+unique(butterfly_adults_capped$species)
+
+
+#separate by species and check occurrence records total by species 
+archippus_capped <- subset(butterfly_adults_capped, species == "Limenitis archippus")
+length(archippus_capped$id) 
+
+
+astyanax_capped <- subset(butterfly_adults_capped, species == "Limenitis astyanax")
+length(astyanax_capped$id) 
+
+
+battus_capped <- subset(butterfly_adults_capped, species == "Battus philenor")
+length(battus_capped$id) 
+
+D_plexippus_capped <- subset(butterfly_adults_capped, species == "Danaus plexippus")
+length(D_plexippus_capped$id) 
+
+```
+
+
+```{r archippus estimates}
+#archippus estimates 
+my_arc_splits = split(archippus_capped, archippus_capped$latitudinal_bin)
+my_arc_splits$"30"$julian_day
+latitude <- as.vector(unique(my_arc_splits$"30"$latitudinal_bin))
+
+archippus_df = data.frame()
+
+# archippus 
+# for loop with quantile estimates 
+for (i in my_arc_splits) {
+  sample_size <- length(i$id)
+  if (length(i$id) > 30){
+    onset <- quantile_ci(observations = i$julian_day, percentile = 0.05, bootstraps = 10000, conf = 0.95, type = "perc")
+    offset <- quantile_ci(observations = i$julian_day, percentile = 0.95, bootstraps = 10000, conf = 0.95, type = "perc")
+    output <- c("archippus", as.vector(unique(i$latitudinal_bin)), sample_size, onset, offset)
+    output <- as.data.frame(output)
+    colnames(output) <- c("species", "latitude", "sample_size", "onset_estimate", "onset_low_ci", "onset_high_ci", "offset_estimate", "offset_low_ci", "offset_high_ci") 
+    } else {
+      output = matrix(
+        c("archippus", as.vector(unique(i$latitudinal_bin)), sample_size, "NA", "NA", "NA", "NA", "NA", "NA"), 
+        nrow = 1,             
+        ncol = 9,           
+        byrow = TRUE         
+        )
+      output <- as.data.frame(output)
+      colnames(output) <- c("species", "latitude", "sample_size", "onset_estimate", "onset_low_ci", "onset_high_ci", "offset_estimate", "offset_low_ci", "offset_high_ci") 
+    }
+
+  archippus_df = rbind(archippus_df, output)
+  
+}
+archippus_df
+```
+
+```{r astyanax estimates}
+# astyanax estimates 
+
+my_ast_splits = split(astyanax_capped, astyanax_capped$latitudinal_bin)
+astyanax_df = data.frame()
+
+# for loop with quantile estimates 
+for (i in my_ast_splits) {
+  sample_size <- length(i$id)
+  if (length(i$id) > 30){
+    onset <- quantile_ci(observations = i$julian_day, percentile = 0.05, bootstraps = 10000, conf = 0.95, type = "perc")
+    offset <- quantile_ci(observations = i$julian_day, percentile = 0.95, bootstraps = 10000, conf = 0.95, type = "perc")
+    output <- c("astyanax", as.vector(unique(i$latitudinal_bin)), sample_size, onset, offset)
+    output <- as.data.frame(output)
+    colnames(output) <- c("species", "latitude", "sample_size", "onset_estimate", "onset_low_ci", "onset_high_ci", "offset_estimate", "offset_low_ci", "offset_high_ci") 
+    } else {
+      output = matrix(
+        c("astyanax", as.vector(unique(i$latitudinal_bin)), sample_size, "NA", "NA", "NA", "NA", "NA", "NA"), 
+        nrow = 1,             
+        ncol = 9,           
+        byrow = TRUE         
+        )
+      output <- as.data.frame(output)
+      colnames(output) <- c("species", "latitude", "sample_size", "onset_estimate", "onset_low_ci", "onset_high_ci", "offset_estimate", "offset_low_ci", "offset_high_ci") 
+    }
+
+  astyanax_df = rbind(astyanax_df, output)
+  
+}
+
+astyanax_df
+```
+
+
+```{r battus estimates }
+#battus estimates 
+
+my_bat_splits = split(battus_capped, battus_capped$latitudinal_bin)
+battus_df = data.frame()
+
+# for loop with quantile estimates 
+for (i in my_bat_splits) {
+  sample_size <- length(i$id)
+  if (length(i$id) > 30){
+    onset <- quantile_ci(observations = i$julian_day, percentile = 0.05, bootstraps = 10000, conf = 0.95, type = "perc")
+    offset <- quantile_ci(observations = i$julian_day, percentile = 0.95, bootstraps = 10000, conf = 0.95, type = "perc")
+    output <- c("battus", as.vector(unique(i$latitudinal_bin)), sample_size, onset, offset)
+    output <- as.data.frame(output)
+    colnames(output) <- c("species", "latitude", "sample_size", "onset_estimate", "onset_low_ci", "onset_high_ci", "offset_estimate", "offset_low_ci", "offset_high_ci") 
+    } else {
+      output = matrix(
+        c("battus", as.vector(unique(i$latitudinal_bin)), sample_size, "NA", "NA", "NA", "NA", "NA", "NA"), 
+        nrow = 1,             
+        ncol = 9,           
+        byrow = TRUE         
+        )
+      output <- as.data.frame(output)
+      colnames(output) <- c("species", "latitude", "sample_size", "onset_estimate", "onset_low_ci", "onset_high_ci", "offset_estimate", "offset_low_ci", "offset_high_ci") 
+    }
+
+  battus_df = rbind(battus_df, output)
+  
+}
+
+battus_df
+```
+
+```{r D_plexippus estimates }
+#D_plexippus estimates 
+
+my_plexi_splits = split(D_plexippus_capped, D_plexippus_capped$latitudinal_bin)
+D_plexippus_df = data.frame()
+
+# for loop with quantile estimates 
+for (i in my_plexi_splits) {
+  sample_size <- length(i$id)
+  if (length(i$id) > 30){
+    onset <- quantile_ci(observations = i$julian_day, percentile = 0.05, bootstraps = 10000, conf = 0.95, type = "perc")
+    offset <- quantile_ci(observations = i$julian_day, percentile = 0.95, bootstraps = 10000, conf = 0.95, type = "perc")
+    output <- c("D_plexippus", as.vector(unique(i$latitudinal_bin)), sample_size, onset, offset)
+    output <- as.data.frame(output)
+    colnames(output) <- c("species", "latitude", "sample_size", "onset_estimate", "onset_low_ci", "onset_high_ci", "offset_estimate", "offset_low_ci", "offset_high_ci") 
+    } else {
+      output = matrix(
+        c("D_plexippus", as.vector(unique(i$latitudinal_bin)), sample_size, "NA", "NA", "NA", "NA", "NA", "NA"), 
+        nrow = 1,             
+        ncol = 9,           
+        byrow = TRUE         
+        )
+      output <- as.data.frame(output)
+      colnames(output) <- c("species", "latitude", "sample_size", "onset_estimate", "onset_low_ci", "onset_high_ci", "offset_estimate", "offset_low_ci", "offset_high_ci") 
+    }
+
+  D_plexippus_df = rbind(D_plexippus_df, output)
+  
+}
+
+D_plexippus_df
+```
+
+
+#create data file and save externally 
+```{r write csv file}
+GBIF_phenesse_estimates_df = rbind(battus_df, astyanax_df, D_plexippus_df, archippus_df)
+
+## write output into a CSV file 
+write.csv(GBIF_phenesse_estimates_df,file='/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenesse_csv_files/GBIF_phenesse_estimates_df.csv', row.names=FALSE)
+
+```

@@ -1,0 +1,265 @@
+---
+title: "GBIF_point_plots"
+author: "Abby Robinson"
+date: "2025-03-19"
+output: html_document
+---
+point plots showing total data spread from iNaturalist and samples sizes 
+
+# data processing 
+```{r load packages}
+library(curl)
+library(sf)
+library(ggplot2)
+library(lubridate)
+library(spData)
+library(ggmap)
+library(sp)
+library(adehabitatHR) ##kernal density package 
+library(maps)
+```
+
+```{r load and filter data}
+# use download key to load data from GBIF download 
+data <- occ_download_get(key="0017454-250310093411724", overwrite=TRUE)
+data <- occ_download_import(data)
+butterfly_data <- as.data.frame(data)
+
+length(butterfly_data$gbifID)
+
+butterfly_data <- subset(butterfly_data, select = c(gbifID, lifeStage, eventDate, decimalLatitude, decimalLongitude, species) )
+butterfly_adults <- subset(butterfly_data, lifeStage == "Adult")
+length(butterfly_adults$gbifID)
+
+butterfly_adults <- na.omit(butterfly_adults)
+length(butterfly_adults$gbifID)
+
+#rename columns
+colnames(butterfly_adults)[1] ="id"
+colnames(butterfly_adults)[2] ="life_stage"
+colnames(butterfly_adults)[3] ="event_date"
+colnames(butterfly_adults)[4] ="latitude"
+colnames(butterfly_adults)[5] ="longitude"
+
+head(butterfly_adults)
+
+unique(butterfly_adults$species)
+
+limenitis <- subset(butterfly_data, species == "Limenitis astyanax")
+unique(butterfly_data$species)
+unique(limenitis$infraspecificEpithet) #dataset only inlcudes limenitis arthemis astyanax morph 
+```
+
+```{r create julian day columns}
+#separate date and time 
+butterfly_adults[c('observed_on', 'observed_time')] <- str_split_fixed(butterfly_adults$event_date, 'T', 2)
+butterfly_adults
+
+# Adding dates to whole  dataset
+dates <- parse_date_time(butterfly_adults$observed_on, "ymd")
+months <- months(dates)
+year <- year(dates)
+day <- day(dates)
+days_of_the_year <- yday(dates) #  days since Jan 1
+butterfly_adults$julian_day <- days_of_the_year
+butterfly_adults$year <- year
+butterfly_adults$month <- months
+butterfly_adults$day <- day
+butterfly_adults
+
+
+butterfly_adults
+```
+
+#Create latitudianl bins
+```{r create lat bins}
+#run analysis on all research grade records between 2014 - 2024 (10 years)
+butterfly_adults <- subset(butterfly_adults, year %in% 2014:2024)
+length(butterfly_adults$id)
+
+# Next use the round() function to create a new column binning all latitudes into integer values.
+butterfly_adults$latitudinal_bin <- round(butterfly_adults$latitude)
+butterfly_adults <- butterfly_adults[order(butterfly_adults$latitudinal_bin, decreasing=F),]
+butterfly_adults
+
+#subset latitudinal bins of interest 
+butterfly_adults_30_40 <- subset(butterfly_adults, latitudinal_bin %in% 30:40)
+
+# Check to ensure the data was binned correctly.
+head(butterfly_adults)
+tail(butterfly_adults) 
+length(butterfly_adults$id) 
+unique(butterfly_adults$year)
+```
+
+#cap sightings by unique combinations of species, latitude, and date 
+this helps correct for artificial inflation of sightings on specific dates (for example, if there was a butterfly surveying event that caused an abnormally high number of butterflies to be recorded in iNaturalist)
+
+```{r cap data}
+#creating grid system of approximate 7 km cells to correct for observer bias 
+butterfly_adults$lat0_1 <- round(butterfly_adults$latitude, digits = 1)
+butterfly_adults$long0_1 <- round(butterfly_adults$longitude, digits = 1)
+
+butterfly_adults$coords0_1 <- paste(butterfly_adults$lat0_1, butterfly_adults$long0_1, sep= "-")
+
+butterfly_adults$sp_coords_date_ID <- paste(butterfly_adults$species, butterfly_adults$coords0_1, butterfly_adults$observed_on, sep= ":")
+length(butterfly_adults$id)
+butterfly_adults_capped = butterfly_adults[!duplicated(butterfly_adults$sp_coords_date_ID),]
+length(butterfly_adults_capped$id) 
+#this removes duplicate sightings of the same species on the same day that are within 7km of each other 
+
+unique(butterfly_adults_capped$species)
+#subset by species 
+battus_capped <- subset(butterfly_adults_capped, species == "Battus philenor")
+astyanax_capped <- subset(butterfly_adults_capped, species == "Limenitis astyanax")
+archippus_capped <- subset(butterfly_adults_capped, species == "Limenitis archippus")
+plexippus_capped <- subset(butterfly_adults_capped, species == "Danaus plexippus")
+```
+
+# calculate sample size 
+calculate total number of observations per species from iNaturalist within the latitudinal bounds of the study (western limit of -98, northern limit of 41, which corresponds to the point at which battus becomes very rare, according to previous research (Ries&Mullen2008))
+
+```{r sample sizes}
+setwd("/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenesse_csv_files") #set working directory 
+estimates <- read.csv("GBIF_phenesse_estimates_df.csv") #load phenesse estimates data file from working directory 
+
+#subset by species 
+battus <- subset(estimates, species == "battus")
+astyanax <- subset(estimates, species == "astyanax")
+archippus <- subset(estimates, species == "archippus")
+plexippus <- subset(estimates, species == "D_plexippus")
+
+#total sample size 
+sum(battus$sample_size)
+sum(astyanax$sample_size)
+sum(archippus$sample_size)
+sum(plexippus$sample_size)
+
+#mean sample size per latitudinal bin 
+mean(battus$sample_size)
+mean(astyanax$sample_size)
+mean(archippus$sample_size)
+mean(plexippus$sample_size)
+
+#standard error in sample size per latitudinal bin
+print(sd(battus$sample_size)/sqrt(length((battus$sample_size))))
+print(sd(astyanax$sample_size)/sqrt(length((astyanax$sample_size))))
+print(sd(archippus$sample_size)/sqrt(length((archippus$sample_size))))
+print(sd(plexippus$sample_size)/sqrt(length((plexippus$sample_size))))     
+```
+
+
+
+# point plots 
+```{r create sf options for plotting}
+
+## point plots (not for kernel density)
+bat1 <- st_as_sf(battus_capped, coords = c("longitude", "latitude"))
+b1 <- ggplot() + geom_sf(data = bat1, color = "lightpink", alpha = 0.5) + theme_bw()
+
+ast1 <- st_as_sf(astyanax_capped, coords = c("longitude", "latitude"))
+as1 <- ggplot() + geom_sf(data = ast1, color = "royalblue", alpha = 0.5) + theme_bw()
+
+arc1 <- st_as_sf(archippus_capped, coords = c("longitude", "latitude"))
+ar1 <- ggplot() + geom_sf(data = arc1, color = "olivedrab", alpha = 0.5) + theme_bw()
+
+plex1 <- st_as_sf(plexippus_capped, coords = c("longitude", "latitude"))
+pl1 <- ggplot() + geom_sf(data = plex1, color = "orange", alpha = 0.5) + theme_bw()
+
+#name world map for point plots below 
+world <- map_data("world")
+```
+
+```{r battus point plot}
+bat_pp <- ggplot() + 
+  geom_polygon( data=world, aes(x=long, y=lat, group=group), color="grey", fill = "white", alpha=0.7) + 
+  labs(x = "Longitude", y = "Latitude")  +
+  geom_sf(data = bat1, color = "navyblue", alpha = 0.3) +
+  geom_rect(aes(xmin = -98, xmax = -74, ymin = 29.5, ymax = 41.5),
+            fill = "transparent", color = "black", size = 2) +
+  coord_sf(xlim = c(-130, -60), ylim = c(15, 60), expand = FALSE) +
+  annotate("text", x=-129, y=59, label= "A.", fontface = "bold", size = 6, hjust = 0) + 
+  annotate("text", x=-125, y=59, label= "B. philenor", fontface = "italic", size = 6, hjust = 0) + 
+  annotate("text", x=-125, y=56, label= "n = 13650", size = 6, hjust = 0) + 
+  theme_classic() + 
+  theme(axis.ticks = element_line(size = 1, color="black") , 
+        axis.ticks.length = unit(.3, "cm"), 
+        axis.title = element_text( color="black", size=15, face=2),
+        axis.line = element_line(size = 1, colour = "black", linetype=1),
+        axis.text = element_text(color="black", size=15, face=1)
+  ) 
+bat_pp
+```
+
+```{r astyanax point plot}
+ast_pp <- ggplot() + 
+  geom_polygon( data=world, aes(x=long, y=lat, group=group), color="grey", fill = "white", alpha=0.7) + 
+  labs(x = "Longitude", y = "Latitude")  +
+  geom_sf(data = ast1, color = "lightblue", alpha = 0.3) +
+  geom_rect(aes(xmin = -98, xmax = -74, ymin = 29.5, ymax = 41.5),
+            fill = "transparent", color = "black", size = 2) +
+  coord_sf(xlim = c(-130, -60), ylim = c(15, 60), expand = FALSE) +
+  annotate("text", x=-129, y=59, label= "B.", fontface = "bold", size = 6, hjust = 0) + 
+  annotate("text", x=-125, y=59, label= "L. a. astyanax", fontface = "italic", size = 6, hjust = 0) + 
+  annotate("text", x=-125, y=56, label= "n = 13796", size = 6, hjust = 0) + 
+  theme_classic() + 
+  theme(axis.ticks = element_line(size = 1, color="black") , 
+        axis.ticks.length = unit(.3, "cm"), 
+        axis.title = element_text( color="black", size=15, face=2),
+        axis.line = element_line(size = 1, colour = "black", linetype=1),
+        axis.text = element_text(color="black", size=15, face=1)
+  ) 
+ast_pp
+```
+
+```{r}
+arc_pp <- ggplot() + 
+  geom_polygon( data=world, aes(x=long, y=lat, group=group), color="grey", fill = "white", alpha=0.7) + 
+  labs(x = "Longitude", y = "Latitude")  +
+  geom_sf(data = arc1, color = "orange", alpha = 0.3) +
+  geom_rect(aes(xmin = -98, xmax = -74, ymin = 29.5, ymax = 41.5),
+            fill = "transparent", color = "black", size = 2) +
+  coord_sf(xlim = c(-130, -60), ylim = c(15, 60), expand = FALSE) +
+  annotate("text", x=-129, y=59, label= "D.", fontface = "bold", size = 6, hjust = 0) + 
+  annotate("text", x=-125, y=59, label= "L. archippus", fontface = "italic", size = 6, hjust = 0) + 
+  annotate("text", x=-125, y=56, label= "n = 7062", size = 6, hjust = 0) + 
+  theme_classic() + 
+  theme(axis.ticks = element_line(size = 1, color="black") , 
+        axis.ticks.length = unit(.3, "cm"), 
+        axis.title = element_text( color="black", size=15, face=2),
+        axis.line = element_line(size = 1, colour = "black", linetype=1),
+        axis.text = element_text(color="black", size=15, face=1)
+  ) 
+arc_pp
+```
+
+```{r}
+plex_pp <- ggplot() + 
+  geom_polygon( data=world, aes(x=long, y=lat, group=group), color="grey", fill = "white", alpha=0.7) + 
+  labs(x = "Longitude", y = "Latitude")  +
+  geom_sf(data = plex1, color = "brown", alpha = 0.3) +
+  geom_rect(aes(xmin = -98, xmax = -74, ymin = 29.5, ymax = 41.5),
+            fill = "transparent", color = "black", size = 2) +
+  coord_sf(xlim = c(-130, -60), ylim = c(15, 60), expand = FALSE) +
+  annotate("text", x=-129, y=59, label= "C.", fontface = "bold", size = 6, hjust = 0) + 
+  annotate("text", x=-125, y=59, label= "D. plexippus", fontface = "italic", size = 6, hjust = 0) + 
+  annotate("text", x=-125, y=56, label= "n = 39636", size = 6, hjust = 0) + 
+  theme_classic() + 
+  theme(axis.ticks = element_line(size = 1, color="black") , 
+        axis.ticks.length = unit(.3, "cm"), 
+        axis.title = element_text( color="black", size=15, face=2),
+        axis.line = element_line(size = 1, colour = "black", linetype=1),
+        axis.text = element_text(color="black", size=15, face=1)
+  ) 
+plex_pp
+```
+
+
+```{r save figure}
+
+library(patchwork)
+
+final_fig <- bat_pp + plex_pp + ast_pp + arc_pp 
+
+ggsave(final_fig, file = "/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenology_figures/final_point_plot.pdf", width=15, height=10, units=c("in"), useDingbats=FALSE)
+```

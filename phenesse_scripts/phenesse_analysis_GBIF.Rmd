@@ -1,0 +1,450 @@
+---
+title: "phenesse_analysis_GBIF"
+author: "Abby Robinson"
+date: "2025-03-19"
+output: html_document
+---
+
+this script includes all analyses of phenesee estimates 
+
+# Calculating a p-value from confidence intervals 
+https://genometoolbox.blogspot.com/2013/11/how-to-estimate-p-value-from-confidence.html#:~:text=Therefore%2C%20if%20we%20are%20given,to%20calculate%20the%20p%2Dvalue.
+
+Confidence intervals (CIs) are useful statistical calculations to help get a level of certainty around an estimated effect size.  Whenever possible, I advocate to include a CI when reporting an estimated effect size.  Sometimes, however, it is of interest to back calculate a p-value from a confidence interval if the p-value is not reported in the manuscript.  To do so, we need to remember the basic equations for the confidence interval and the calculation of a p-value.  Assuming we are dealing with a 95% CI, we would take the effect size and subtract/add 1.96 times the standard error of the effect size to get our lower and upper bounds of the confidence interval.  For the p-value, we just take the effect estimate and divide it by the standard error of the effect estimate to get a z score from which we can calculate the p-value.  Therefore, if we are given an effect size and confidence interval all we need to do is back calculate the standard error and combine that with the effect size to get the z score used to calculate the p-value.  Below are two examples to illustrate how to do this.
+
+Suppose we have an estimate of a risk difference and a respective 95 percent confidence interval of 3.60 (0.70, 6.50).  Here are the steps to follow:
+(1) Subtract the lower limit from the upper limit to get the difference and divide by 2: (6.50-0.70)/2=2.9
+(2) Divide the difference by 1.96 (for a 95% CI) to get the standard error estimate: 2.9/1.96=1.48
+(3) Divide the risk difference estimate by the standard error estimate to get a z score: 3.60/1.48=2.43
+(4) Look up the z score using Python, R (ex: 2*pnorm(-abs(z))), Excel (ex: 2*1-normsdist(z score)), or an online calculator to get the p-value.  Usually the two-sided p-value is reported: p=0.015 (two-sided)
+
+```{r practice calculations}
+# this chunk is practice code for calculating a z score and p value at latitudinal bin 27 
+# calculating standard error from confidence intervals (https://genometoolbox.blogspot.com/2013/11/how-to-estimate-p-value-from-confidence.html#:~:text=Therefore%2C%20if%20we%20are%20given,to%20calculate%20the%20p%2Dvalue.)
+
+#archippus: estimate = 39.6, low ci=18, high ci=69, sample size=173
+#battus: estimate=41.3, low ci=33.8, high ci=55, sample size=147
+
+#battus 
+ci_diff_battus <- (55 - 33.8)/2
+se_battus <- ci_diff_battus/1.96 #1.96 is the number corresponding to the 95% confidence interval 
+
+#archippus 
+ci_diff_arch <- (69 - 18)/2
+se_arch <- ci_diff_arch/1.96 #1.96 is the number corresponding to the 95% confidence interval 
+
+
+## calculating standard deviation from standard error (https://handbook-5-1.cochrane.org/chapter_7/7_7_3_2_obtaining_standard_deviations_from_standard_errors_and.htm)
+
+#battus
+sd_battus <- se_battus*sqrt(147)
+sd_arch <- se_arch*sqrt(173)
+
+mean_battus <- 41.3
+mean_arch <- 39.6
+
+n_battus <- 147
+n_arch <- 173
+##calculating z score in r from mean and standard deviation (https://camilo-mora.github.io/GEO380/the-two-sample-z-test-by-hand.html)
+
+Z_Score_Numerator= (mean_battus-mean_arch) -0  #because we assume that the two treatments have the same effect, we then have to assume that the difference between the population means is zero.
+
+Z_Score_denominator= sqrt(((sd_battus^2)/n_battus)+((sd_arch^2)/n_arch))
+                          
+Z_score=Z_Score_Numerator/Z_Score_denominator
+
+
+##calculate p vlaue from z score (https://www.r-bloggers.com/2022/05/calculate-the-p-value-from-z-score-in-r/)
+2*pnorm(q=Z_score, lower.tail=FALSE) #q is the z score 
+```
+
+# data processing 
+```{r load data and subset species}
+setwd("/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenesse_csv_files") # set working directory 
+estimates <- read.csv("GBIF_phenesse_estimates_df.csv") # load phenesse estimate data 
+
+#remove NAs from dataset 
+length(estimates$species) 
+
+## we want to calculate z-scores for two comparisons. subset out those species before proceeding 
+
+battus <- subset(estimates, species == "battus")
+astyanax <- subset(estimates, species == "astyanax")
+
+plexippus <- subset(estimates, species == "D_plexippus")
+archippus <- subset(estimates, species == "archippus")
+
+```
+
+#calculate standard deviation for each species
+
+```{r battus}
+
+##check data structure and convert latitude to factor and sample size into integer data 
+str(battus)
+battus$latitude = as.factor(battus$latitude)
+battus$sample_size = as.numeric(battus$sample_size)
+battus$offset_high_ci = as.numeric(battus$offset_high_ci)
+str(battus)
+
+#split data by latitudinal bin for loop function 
+my_battus_splits = split(battus, battus$latitude)
+my_battus_splits$"30"$latitude
+length(my_battus_splits) #11 latitudes 
+as.vector(unique(my_battus_splits$"30"$latitude))
+
+sd_battus_df = data.frame() # create empty data frame 
+
+for (i in my_battus_splits) {
+  ci_diff <- (i$onset_high_ci - i$onset_low_ci)/2
+  se <- ci_diff/1.96  #1.96 is the number corresponding to the 95% confidence interval 
+  sd <- se*sqrt(i$sample_size)
+  lat <- as.vector(unique(i$latitude))
+  output = matrix(
+        c(lat, sd), 
+        nrow = 1,             
+        ncol = 2,           
+        byrow = TRUE         
+        )
+  output <- as.data.frame(output)
+  sd_battus_df = rbind(sd_battus_df, output)
+}
+
+sd_battus_df # data frame with standard error for battus 
+
+##check loop by running lat 30 by hand  
+battus30 <- subset(battus, latitude == 30)
+ci_diff <- (battus30$onset_high_ci - battus30$onset_low_ci)/2
+se <- ci_diff/1.96
+sd <- se*sqrt(battus30$sample_size)
+sd #matches lat 30 in loop 
+
+```
+
+```{r astyanax }
+
+##check data structure and convert latitude to factor and sample size into integer data 
+str(astyanax)
+astyanax$latitude = as.factor(astyanax$latitude)
+astyanax$sample_size = as.numeric(astyanax$sample_size)
+astyanax$offset_high_ci = as.numeric(astyanax$offset_high_ci)
+str(astyanax)
+
+#split data by latitudinal bin for loop function 
+my_astyanax_splits = split(astyanax, astyanax$latitude)
+
+sd_astyanax_df = data.frame() 
+
+for (i in my_astyanax_splits) {
+  ci_diff <- (i$onset_high_ci - i$onset_low_ci)/2
+  se <- ci_diff/1.96  #1.96 is the number corresponding to the 95% confidence interval 
+  sd <- se*sqrt(i$sample_size)
+  lat <- as.vector(unique(i$latitude))
+  output = matrix(
+        c(lat, sd), 
+        nrow = 1,             
+        ncol = 2,           
+        byrow = TRUE         
+        )
+  output <- as.data.frame(output)
+  sd_astyanax_df = rbind(sd_astyanax_df, output)
+}
+
+sd_astyanax_df
+
+##check loop by running lat 30 by hand  
+astyanax30 <- subset(astyanax, latitude == 30)
+ci_diff <- (astyanax30$onset_high_ci - astyanax30$onset_low_ci)/2
+se <- ci_diff/1.96
+sd <- se*sqrt(astyanax30$sample_size)
+sd #matches result from loop function 
+```
+
+```{r archippus }
+
+##check data structure and convert latitude to factor and sample size into integer data 
+str(archippus)
+archippus$latitude = as.factor(archippus$latitude)
+archippus$sample_size = as.numeric(archippus$sample_size)
+str(archippus)
+
+my_archippus_splits = split(archippus, archippus$latitude)
+
+sd_archippus_df = data.frame()
+
+for (i in my_archippus_splits) {
+  ci_diff <- (i$onset_high_ci - i$onset_low_ci)/2
+  se <- ci_diff/1.96  #1.96 is the number corresponding to the 95% confidence interval 
+  sd <- se*sqrt(i$sample_size)
+  lat <- as.vector(unique(i$latitude))
+  output = matrix(
+        c(lat, sd), 
+        nrow = 1,             
+        ncol = 2,           
+        byrow = TRUE         
+        )
+  output <- as.data.frame(output)
+  sd_archippus_df = rbind(sd_archippus_df, output)
+}
+
+sd_archippus_df
+
+```
+
+```{r plexippus }
+
+##check data structure and convert latitude to factor and sample size into integer data 
+str(plexippus)
+plexippus$latitude = as.factor(plexippus$latitude)
+plexippus$sample_size = as.numeric(plexippus$sample_size)
+plexippus$offset_high_ci = as.numeric(plexippus$offset_high_ci)
+str(plexippus)
+
+#split data by latitudinal bin for loop function 
+my_plexippus_splits = split(plexippus, plexippus$latitude)
+
+sd_plexippus_df = data.frame() 
+
+for (i in my_plexippus_splits) {
+  ci_diff <- (i$onset_high_ci - i$onset_low_ci)/2
+  se <- ci_diff/1.96  #1.96 is the number corresponding to the 95% confidence interval 
+  sd <- se*sqrt(i$sample_size)
+  lat <- as.vector(unique(i$latitude))
+  output = matrix(
+        c(lat, sd), 
+        nrow = 1,             
+        ncol = 2,           
+        byrow = TRUE         
+        )
+  output <- as.data.frame(output)
+  sd_plexippus_df = rbind(sd_plexippus_df, output)
+}
+
+sd_plexippus_df
+
+```
+
+# create data frames for z tests
+```{r create data frame}
+##generate data frame with latitude, estimate_battus, estimate_astyanax, n_bat, n_ast, sd_bat, sd_ast 
+
+ztest_data_df <- data.frame(latitude = 30:40, 
+                             battus_estimate = battus$onset_estimate, 
+                             battus_n = battus$sample_size, 
+                             battus_sd = sd_battus_df$V2, 
+                             astyanax_estimate = astyanax$onset_estimate, 
+                             astyanax_n = astyanax$sample_size, 
+                             astyanax_sd = sd_astyanax_df$V2,
+                             plexippus_estimate = plexippus$onset_estimate, 
+                             plexippus_n = plexippus$sample_size, 
+                             plexippus_sd = sd_plexippus_df$V2, 
+                             archippus_estimate = archippus$onset_estimate, 
+                             archippus_n = archippus$sample_size, 
+                             archippus_sd = sd_archippus_df$V2)
+ztest_data_df
+
+```
+#run z tests 
+```{r z test loop function}
+## write loop function that will run the z test and p value calculation for each pairwise comparison 
+
+ztest_data_df
+
+##check data structure and convert latitude to factor and sample size into integer data 
+str(ztest_data_df)
+
+ztest_data_df$latitude = as.factor(ztest_data_df$latitude)
+ztest_data_df$battus_sd = as.numeric(ztest_data_df$battus_sd)
+ztest_data_df$astyanax_sd = as.numeric(ztest_data_df$astyanax_sd)
+ztest_data_df$plexippus_sd = as.numeric(ztest_data_df$plexippus_sd)
+ztest_data_df$archippus_sd = as.numeric(ztest_data_df$archippus_sd)
+str(ztest_data_df)
+
+#split z score data frame by latitude for loop function
+my_ztest_splits = split(ztest_data_df, ztest_data_df$latitude)
+
+options(scipen=999)
+
+ztest_df = data.frame() #create empty data frame 
+
+##this loop function runs a two sample z test for all pairwise comparisons at each latitude 
+for (i in my_ztest_splits) {
+  ## battus - astyanax comparison 
+  bat_ast_numerator= (i$battus_estimate - i$astyanax_estimate) - 0  #because we assume that the two treatments have the same effect, we then have to assume that the difference between the population means is zero.
+  bat_ast_denominator= sqrt(((i$battus_sd^2)/i$battus_n)+((i$astyanax_sd^2)/i$astyanax_n))
+  bat_ast_z_score = abs(bat_ast_numerator/bat_ast_denominator)
+  bat_ast_p_value = 2*pnorm(q=bat_ast_z_score, lower.tail=FALSE) #q is the z score 
+  lat = as.vector(unique(i$latitude))
+  bat_ast = matrix(
+        c(lat, "battus_astyanax", bat_ast_z_score, bat_ast_p_value), 
+        nrow = 1,             
+        ncol = 4,           
+        byrow = TRUE         
+        )
+  bat_ast <- as.data.frame(bat_ast)
+  
+  ## plexippus - archippus comparison 
+  plex_arc_numerator= (i$plexippus_estimate - i$archippus_estimate) - 0  #because we assume that the two treatments have the same effect, we then have to assume that the difference between the population means is zero.
+  plex_arc_denominator= sqrt(((i$plexippus_sd^2)/i$plexippus_n)+((i$archippus_sd^2)/i$archippus_n))
+  plex_arc_z_score = abs(plex_arc_numerator/plex_arc_denominator)
+  plex_arc_p_value = 2*pnorm(q=plex_arc_z_score, lower.tail=FALSE) #q is the z score 
+  lat = as.vector(unique(i$latitude))
+  plex_arc = matrix(
+        c(lat, "plexippus_archippus", plex_arc_z_score, plex_arc_p_value), 
+        nrow = 1,             
+        ncol = 4,           
+        byrow = TRUE         
+        )
+  plex_arc <- as.data.frame(plex_arc)
+  
+  ztest_df = rbind(ztest_df, bat_ast, plex_arc)
+}
+
+colnames(ztest_df) <- c("latitude", "species_comparison", "z_score", "p_value") 
+ztest_df
+
+
+## write output into a CSV file 
+write.csv(ztest_df,file='/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenesse_csv_files/ztest_df.csv', row.names=FALSE)
+```
+
+#calculate average emergence delay between models and mimics 
+
+```{r mean emergence delay}
+## emergence delay at each latitude with standard error
+
+#battus-astyanas comparison
+ztest_bat_ast <- subset(ztest_df, species_comparison == "battus_astyanax")
+ztest_data_df # data file with onset estimates 
+
+ztest_bat_ast$battus_estimate <- ztest_data_df$battus_estimate
+ztest_bat_ast$astyanax_estimate <- ztest_data_df$astyanax_estimate
+emergence_delay <- ztest_bat_ast$astyanax_estimate - ztest_bat_ast$battus_estimate 
+
+ztest_bat_ast$emergence_delay <- emergence_delay
+
+
+mean(ztest_bat_ast$emergence_delay) #15.75455 days 
+# mean emergence delay between models and mimics 
+
+#standard error
+print(sd(ztest_bat_ast$emergence_delay)/sqrt(length((ztest_bat_ast$emergence_delay))))
+#1.785961
+
+## plexippus-archippus comparison
+ztest_plex_arc <- subset(ztest_df, species_comparison == "plexippus_archippus")
+ztest_data_df # data file with onset estimates 
+
+ztest_plex_arc$plexippus_estimate <- ztest_data_df$plexippus_estimate
+ztest_plex_arc$archippus_estimate <- ztest_data_df$archippus_estimate
+emergence_delay2 <- ztest_plex_arc$archippus_estimate - ztest_plex_arc$plexippus_estimate 
+
+ztest_plex_arc$emergence_delay <- emergence_delay2
+
+mean(ztest_plex_arc$emergence_delay) #9.818182 days
+
+#standard error
+print(sd(ztest_plex_arc$emergence_delay)/sqrt(length((ztest_plex_arc$emergence_delay))))
+#5.962196
+
+## write output into a CSV file 
+write.csv(ztest_bat_ast,file='/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenesse_csv_files/ztest_bat_ast.csv', row.names=FALSE)
+
+## write output into a CSV file 
+write.csv(ztest_plex_arc,file='/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenesse_csv_files/ztest_plex_arc.csv', row.names=FALSE)
+
+```
+# mean sample size & standard error for each species 
+```{r mean sample size}
+## battus 
+
+#mean 
+battus_n <- ztest_data_df$battus_n
+battus_mean_n <- mean(battus_n)
+#standard error 
+print(sd(battus_n)/sqrt(length((battus_n))))
+
+## astyanax 
+
+#mean 
+astyanax_n <- ztest_data_df$astyanax_n
+astyanax_mean_n <- mean(astyanax_n)
+#standard error 
+print(sd(astyanax_n)/sqrt(length((astyanax_n))))
+
+## plexippus
+
+#mean 
+plexippus_n <- ztest_data_df$plexippus_n
+plexippus_mean_n <- mean(plexippus_n)
+#standard error 
+print(sd(plexippus_n)/sqrt(length((plexippus_n))))
+
+
+## archippus
+
+#mean 
+archippus_n <- ztest_data_df$archippus_n
+archippus_mean_n <- mean(archippus_n)
+#standard error 
+print(sd(archippus_n)/sqrt(length((archippus_n))))
+
+
+```
+
+# mean onset dates for each species 
+```{r mean onset date}
+
+##subset out individual species 
+battus <- subset(estimates, species == "battus")
+astyanax <- subset(estimates, species == "astyanax")
+plexippus <- subset(estimates, species == "D_plexippus")
+archippus <- subset(estimates, species == "archippus")
+
+mean(battus$onset_estimate) #97.85
+battus_onset <- battus$onset_estimate
+#standard error 
+print(sd(battus_onset)/sqrt(length((battus_onset)))) #5.351436
+
+mean(astyanax$onset_estimate) #113.6045
+astyanax_onset <- astyanax$onset_estimate
+print(sd(astyanax_onset)/sqrt(length((astyanax_onset)))) #6.455162
+
+mean(plexippus$onset_estimate) #113.3091
+plexippus_onset <- plexippus$onset_estimate
+print(sd(plexippus_onset)/sqrt(length((plexippus_onset)))) #11.31648
+
+mean(archippus$onset_estimate) #123.1273
+archippus_onset <- archippus$onset_estimate
+print(sd(archippus_onset)/sqrt(length((archippus_onset)))) #5.446268
+
+#difference in onset date between northernmost and southernmost latitudes 
+battus_north <- subset(battus, latitude == 40)
+battus_north$onset_estimate
+battus_south <- subset(battus, latitude == 30)
+battus_south$onset_estimate
+battus_onset_diff <- battus_north$onset_estimate - battus_south$onset_estimate
+
+astyanax_north <- subset(astyanax, latitude == 40)
+astyanax_north$onset_estimate
+astyanax_south <- subset(astyanax, latitude == 30)
+astyanax_south$onset_estimate
+astyanax_onset_diff <- astyanax_north$onset_estimate - astyanax_south$onset_estimate
+
+plexippus_north <- subset(plexippus, latitude == 40)
+plexippus_north$onset_estimate
+plexippus_south <- subset(plexippus, latitude == 30)
+plexippus_south$onset_estimate
+plexippus_onset_diff <- plexippus_north$onset_estimate - plexippus_south$onset_estimate
+
+archippus_north <- subset(archippus, latitude == 40)
+archippus_north$onset_estimate
+archippus_south <- subset(archippus, latitude == 30)
+archippus_south$onset_estimate
+archippus_onset_diff <- archippus_north$onset_estimate - archippus_south$onset_estimate
+
+onset_diff <- c(battus_onset_diff, astyanax_onset_diff, plexippus_onset_diff, archippus_onset_diff)
+mean(onset_diff) #71.5
+print(sd(onset_diff)/sqrt(length((onset_diff)))) #15.30523
+
+```

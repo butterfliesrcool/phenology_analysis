@@ -1,0 +1,183 @@
+---
+title: "phenology_plots_GBIF"
+author: "Abby Robinson"
+date: "2025-03-05"
+output: html_document
+---
+
+#load packages 
+```{r Load packages}
+library(curl)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(spData)
+library(sf)
+library(maps)
+library(gginnards)
+library(tibble)
+library(magrittr)
+library(stringr)
+```
+
+#load data 
+```{r load phenesse estimates}
+setwd("/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenesse_csv_files") #set working directory 
+estimates <- read.csv("GBIF_phenesse_estimates_df.csv") #load phenesse estimates data file from working directory 
+
+length(estimates$species) 
+estimates_noNA <- na.omit(estimates) # remove rows with no data (bins that had a sample size less than 30)
+length(estimates_noNA$species) 
+estimates_noNA <- subset(estimates_noNA, latitude %in% 30:40)
+
+```
+## try to convert julian dates to month+day format for x axis
+```{r julian day to date}
+library(eseis)
+date_data <- subset(estimates_noNA, select = c(species, latitude, sample_size, onset_estimate, onset_low_ci, onset_high_ci) )
+str(date_data)
+date_data$onset_estimate <- round(date_data$onset_estimate)
+date_data$onset_low_ci <- round(date_data$onset_low_ci)
+date_data$onset_high_ci <- round(date_data$onset_high_ci)
+
+date_data$onset_estimate <- as.integer(date_data$onset_estimate)
+date_data$onset_low_ci <- as.integer(date_data$onset_low_ci)
+date_data$onset_high_ci <- as.integer(date_data$onset_high_ci)
+
+str(date_data)
+
+onset <- date_data$onset_estimate
+## convert a vector of Julian Days to yyyy-mm-dd
+onset_estimate_date <- time_convert(input = onset, output = "yyyy-mm-dd")
+date_data$onset_estimate_date <- onset_estimate_date
+
+low <- date_data$onset_low_ci
+## convert a vector of Julian Days to yyyy-mm-dd
+low_ci_date <- time_convert(input = low, output = "yyyy-mm-dd")
+date_data$low_ci_date <- low_ci_date
+
+high <- date_data$onset_high_ci
+## convert a vector of Julian Days to yyyy-mm-dd
+high_ci_date <- time_convert(input = high, output = "yyyy-mm-dd")
+date_data$high_ci_date <- high_ci_date
+
+## write output into a CSV file 
+write.csv(date_data,file='/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenesse_csv_files/onset_estimates_dates.csv', row.names=FALSE)
+```
+
+
+
+## onset figure with  battus, plexippus, limenitis, and archippus
+```{r julain day fig}
+options(repr.plot.width =10, repr.plot.height =5)
+
+est_plot_onset <- ggplot(data = estimates_noNA) + 
+  geom_segment(aes(x = onset_low_ci, y = latitude, xend = onset_high_ci, yend = latitude,
+                   color=species), size =2) +
+  geom_point(aes(x = onset_estimate, y = latitude, color=species, fill=species, alpha = 0.5), 
+             shape =21, size = 8, color = "black") +
+  scale_fill_manual(guide="legend", name = "Species",
+                     breaks = c('battus', 'astyanax', 'D_plexippus', 'archippus'),
+                     values = c("navyblue","lightblue","brown", "orange"), 
+                     labels = c(expression(italic("B. philenor")), 
+                                expression(italic("L. a. astyanax")), 
+                                expression(italic("D. plexippus")),
+                                expression(italic("L. archippus")))) +
+    scale_color_manual(guide="legend", name = "Species",
+                       breaks = c('battus', 'astyanax', 'D_plexippus', 'archippus'),
+                       values = c("navyblue","lightblue","brown", "orange"),
+                       labels = c(expression(italic("B. philenor")), 
+                                expression(italic("L. a. astyanax")), 
+                                expression(italic("D. plexippus")),
+                                expression(italic("L. archippus")))) +
+  theme_classic() + 
+  theme(axis.ticks = element_line(size = 2, color="black") , 
+        axis.ticks.length = unit(.5, "cm"), 
+        axis.title = element_text( color="black", size=20, face=2),
+        axis.line = element_line(size = 3, colour = "black", linetype=1),
+        axis.text = element_text(color="black", size=25, face=1), 
+        panel.grid.major.y = element_line(colour="black", size=0.5)
+        ) +
+  labs(x = "Julian Day", y = "Latitude") +
+  scale_y_continuous(breaks = seq(30, 40, 1))
+est_plot_onset
+
+#remake the figure above with horizontal gridlines at each latitude point on the y-axis
+
+ggsave(est_plot_onset, file = "/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenology_figures/est_plot_onset_four_species.pdf", width=15, height=5, units=c("in"), useDingbats=FALSE)
+
+```
+
+## onset figure with  battus, plexippus, limenitis, and archippus
+```{r month-day fig}
+options(repr.plot.width =10, repr.plot.height =5)
+
+est_plot_onset2 <- ggplot(data = date_data) + 
+  geom_segment(aes(x = low_ci_date, y = latitude, xend = high_ci_date, yend = latitude,
+                   color=species), size =2) +
+  geom_point(aes(x = onset_estimate_date, y = latitude, color=species, fill=species, alpha = 0.5), 
+             shape =21, size = 8, color = "black") +
+  scale_fill_manual(guide="legend", name = "Species",
+                     breaks = c('battus', 'astyanax', 'D_plexippus', 'archippus'),
+                     values = c("navyblue","lightblue","brown", "orange"), 
+                     labels = c(expression(italic("B. philenor")), 
+                                expression(italic("L. a. astyanax")), 
+                                expression(italic("D. plexippus")),
+                                expression(italic("L. archippus")))) +
+    scale_color_manual(guide="legend", name = "Species",
+                       breaks = c('battus', 'astyanax', 'D_plexippus', 'archippus'),
+                       values = c("navyblue","lightblue","brown", "orange"),
+                       labels = c(expression(italic("B. philenor")), 
+                                expression(italic("L. a. astyanax")), 
+                                expression(italic("D. plexippus")),
+                                expression(italic("L. archippus")))) +
+  theme_classic() + 
+  theme(axis.ticks = element_line(size = 1.5, color="black") , 
+        axis.ticks.length = unit(.5, "cm"), 
+        axis.title = element_text( color="black", size=20, face=2),
+        axis.line = element_line(size = 3, colour = "black", linetype=1),
+        axis.text = element_text(color="black", size=20, face=2), 
+        panel.grid.major.y = element_line(colour="black", size=0.5)
+        ) +
+  labs(x = "Date", y = "Latitude") +
+  scale_y_continuous(breaks = seq(30, 40, 1)) + 
+  scale_x_date(date_breaks = "2 weeks",
+               date_labels = "%b %d")
+est_plot_onset2
+
+ggsave(est_plot_onset2, file = "/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenology_figures/onset_plot_date.pdf", width=15, height=5, units=c("in"), useDingbats=FALSE)
+```
+
+#base map of USA
+```{r Template map of the US}
+options(repr.plot.width =10, repr.plot.height =5)
+base_map <- ggplot() + 
+  geom_polygon(data = world, aes(x=long, y=lat, group=group), color="black", fill = "white", alpha=2, size =1) +
+  coord_sf(xlim = c(-98, -65), ylim = c(24, 48), expand = FALSE) +
+  scale_y_continuous(breaks = seq(30, 40, 1)) +
+  xlab("Longitude") +
+  ylab("Latitude") +
+  geom_hline(yintercept=30, color = "black", size=1) +
+  geom_hline(yintercept=31, color = "black", size=1) +
+  geom_hline(yintercept=32, color = "black", size=1) +
+  geom_hline(yintercept=33, color = "black", size=1) + 
+  geom_hline(yintercept=34, color = "black", size=1) +
+  geom_hline(yintercept=35, color = "black", size=1) +
+  geom_hline(yintercept=36, color = "black", size=1) + 
+  geom_hline(yintercept=37, color = "black", size=1) + 
+  geom_hline(yintercept=38, color = "black", size=1) +
+  geom_hline(yintercept=39, color = "black", size=1) +
+  geom_hline(yintercept=40, color = "black", size=1) +
+  theme_classic() + 
+  theme(axis.ticks = element_line(size = 1.5, color="black") , 
+        axis.ticks.length = unit(.5, "cm"), 
+        axis.title = element_text( color="black", size=25, face=2),
+        axis.line = element_line(size = 3, colour = "black", linetype=1),
+        axis.text = element_text(color="black", size=25, face=2), 
+        panel.grid.major.y = element_line(colour="black", size=0.5)
+        ) +
+  theme(panel.background = element_blank())
+base_map
+
+ggsave(base_map, file = "/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenology_figures/base_map.pdf", width=20, height=20, units=c("in"), useDingbats=FALSE)
+```

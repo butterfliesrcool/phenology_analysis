@@ -347,6 +347,20 @@ mean(ztest_plex_arc$emergence_delay) #9.818182 days
 print(sd(ztest_plex_arc$emergence_delay)/sqrt(length((ztest_plex_arc$emergence_delay))))
 #5.962196
 
+##mean emergence delay between plexippus and archippus only in latitudes where plexippus emerged first 
+ztest_plex_arc_Mod_first <- subset(ztest_plex_arc, latitude %in% 30:37)
+mean(ztest_plex_arc_Mod_first$emergence_delay) #20 days 
+
+#standard error
+print(sd(ztest_plex_arc_Mod_first$emergence_delay)/sqrt(length((ztest_plex_arc_Mod_first$emergence_delay)))) #3.455379
+
+##mean emergence delay between plexippus and archippus only in latitudes where archippus emerged first  
+ztest_plex_arc_Mim_first <- subset(ztest_plex_arc, latitude %in% 38:40)
+mean(ztest_plex_arc_Mim_first$emergence_delay) #17.33333 days 
+
+#standard error
+print(sd(ztest_plex_arc_Mim_first$emergence_delay)/sqrt(length((ztest_plex_arc_Mim_first$emergence_delay)))) #5.783117
+
 ## write output into a CSV file 
 write.csv(ztest_bat_ast,file='/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenesse_csv_files/ztest_bat_ast.csv', row.names=FALSE)
 

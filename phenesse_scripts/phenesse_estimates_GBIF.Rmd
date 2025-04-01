@@ -134,11 +134,13 @@ length(butterfly_adults_capped$julian_day)
 
 #testing normality 
 library("ggpubr")
+library(moments)
 # Density plot
 ggdensity(butterfly_adults_capped$julian_day, fill = "lightgray")
 # QQ plot
 ggqqplot(butterfly_adults_capped$julian_day)
 hist(butterfly_adults_capped$julian_day)
+skewness(butterfly_adults_capped$julian_day)
 
 
 ## write output into a CSV file 

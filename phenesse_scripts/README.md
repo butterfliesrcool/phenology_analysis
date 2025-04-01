@@ -1,4 +1,4 @@
-# Code for: Citizen science supports ecological predictions of phenology in a butterfly mimicry complex
+# Code for: Citizen science supports ecological predictions of phenology in North American mimetic butterflies 
 
 **DATA CITATION:** iNaturalist contributors, iNaturalist (2025). iNaturalist Research-grade Observations. iNaturalist.org. Occurrence dataset https://doi.org/10.15468/ab3s5x accessed via GBIF.org on 2025-03-19.
 

@@ -73,9 +73,9 @@ options(repr.plot.width =10, repr.plot.height =5)
 
 est_plot_onset <- ggplot(data = estimates_noNA) + 
   geom_segment(aes(x = onset_low_ci, y = latitude, xend = onset_high_ci, yend = latitude,
-                   color=species), size =2) +
-  geom_point(aes(x = onset_estimate, y = latitude, color=species, fill=species, alpha = 0.5), 
-             shape =21, size = 8, color = "black") +
+                   color=species), size =4) +
+  geom_point(aes(x = onset_estimate, y = latitude, color=species, fill=species, alpha = 0.1), 
+             shape =21, size = 9, color = "black", stroke=1) +
   scale_fill_manual(guide="legend", name = "Species",
                      breaks = c('battus', 'astyanax', 'D_plexippus', 'archippus'),
                      values = c("navyblue","lightblue","brown", "orange"), 
@@ -114,19 +114,19 @@ options(repr.plot.width =10, repr.plot.height =5)
 
 est_plot_onset2 <- ggplot(data = date_data) + 
   geom_segment(aes(x = low_ci_date, y = latitude, xend = high_ci_date, yend = latitude,
-                   color=species), size =2) +
-  geom_point(aes(x = onset_estimate_date, y = latitude, color=species, fill=species, alpha = 0.5), 
-             shape =21, size = 8, color = "black") +
+                   color=species), size =3) +
+  geom_point(aes(x = onset_estimate_date, y = latitude, color=species, fill=species), 
+             shape =21, size = 10, color = "black", stroke=1) +
   scale_fill_manual(guide="legend", name = "Species",
                      breaks = c('battus', 'astyanax', 'D_plexippus', 'archippus'),
-                     values = c("navyblue","lightblue","brown", "orange"), 
+                     values = alpha(c("navyblue","lightblue","brown", "orange"), 0.8), 
                      labels = c(expression(italic("B. philenor")), 
                                 expression(italic("L. a. astyanax")), 
                                 expression(italic("D. plexippus")),
                                 expression(italic("L. archippus")))) +
     scale_color_manual(guide="legend", name = "Species",
                        breaks = c('battus', 'astyanax', 'D_plexippus', 'archippus'),
-                       values = c("navyblue","lightblue","brown", "orange"),
+                       values = alpha(c("navyblue","lightblue","brown", "orange"), 0.8),
                        labels = c(expression(italic("B. philenor")), 
                                 expression(italic("L. a. astyanax")), 
                                 expression(italic("D. plexippus")),
@@ -145,12 +145,12 @@ est_plot_onset2 <- ggplot(data = date_data) +
                date_labels = "%b %d")
 est_plot_onset2
 
-ggsave(est_plot_onset2, file = "/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenology_figures/onset_plot_date.pdf", width=15, height=5, units=c("in"), useDingbats=FALSE)
+ggsave(est_plot_onset2, file = "/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenology_figures/onset_plot_date.pdf", width=15, height=7, units=c("in"), useDingbats=FALSE)
 ```
 
 #base map of USA
 ```{r Template map of the US}
-options(repr.plot.width =10, repr.plot.height =5)
+options(repr.plot.width =25, repr.plot.height =15)
 base_map <- ggplot() + 
   geom_polygon(data = world, aes(x=long, y=lat, group=group), color="black", fill = "white", alpha=2, size =1) +
   coord_sf(xlim = c(-98, -65), ylim = c(24, 48), expand = FALSE) +
@@ -179,5 +179,5 @@ base_map <- ggplot() +
   theme(panel.background = element_blank())
 base_map
 
-ggsave(base_map, file = "/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenology_figures/base_map.pdf", width=20, height=20, units=c("in"), useDingbats=FALSE)
+ggsave(base_map, file = "/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenology_figures/base_map.pdf", width=25, height=20, units=c("in"), useDingbats=FALSE)
 ```

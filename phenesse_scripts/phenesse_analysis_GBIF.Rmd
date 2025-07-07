@@ -311,17 +311,23 @@ write.csv(ztest_df,file='/Users/abbyrobinson/Desktop/Phenology Publication/pheno
 ztest_bat_ast <- subset(ztest_df, species_comparison == "battus_astyanax")
 ztest_plex_arc <- subset(ztest_df, species_comparison == "plexippus_archippus")
 
-#holm 
+#battus - astyanax comparison
 p_value_holm_adjusted <- p.adjust(ztest_bat_ast$p_value, method = "holm", n = length(ztest_bat_ast$p_value)) 
-ztest_bat_ast$p_value_holm_adjusted <- p_value_holm_adjusted
 #n= number of comparisons, which is 11 for each species pair 
 
-round(ztest_bat_ast$p_value_holm_adjusted, digits = 5) 
+p_value_holm_adjusted <- round(p_value_holm_adjusted, digits = 5) 
+ztest_bat_ast$p_value_holm_adjusted <- p_value_holm_adjusted
 
+#plexippus - archippus comparison
 p_value_holm_adjusted <- p.adjust(ztest_plex_arc$p_value, method = "holm", n = length(ztest_plex_arc$p_value)) 
+p_value_holm_adjusted <- round(p_value_holm_adjusted, digits = 5) 
+
 ztest_plex_arc$p_value_holm_adjusted <- p_value_holm_adjusted
 
-round(ztest_plex_arc$p_value_holm_adjusted, digits = 5) 
+ztest_p_adjusted <- rbind(ztest_bat_ast, ztest_plex_arc)
+
+## write output into a CSV file 
+write.csv(ztest_p_adjusted,file='/Users/abbyrobinson/Desktop/Phenology Publication/phenology_analysis/phenesse_csv_files/ztest_p_adjusted.csv', row.names=FALSE)
 ```
 
 #calculate average emergence delay between models and mimics 
